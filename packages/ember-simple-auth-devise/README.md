@@ -12,6 +12,10 @@ uses HTTPS!__
 
 ## Server-side setup
 
+__These instructions assume you're using the default Devise configuration and
+models. If you're using a custom model or attribute names, you can
+[configure Ember Simple Auth Devise to work with those](http://ember-simple-auth.com/ember-simple-auth-devise-api-docs.html#SimpleAuth-Configuration-Devise)).__
+
 As token authentication is not actually part of Devise anymore, there are some
 customizations necessary on the server side (most of this is adapted from
 [José Valim's gist on token authentication](https://gist.github.com/josevalim/fb706b1e933ef01e4fb6)).
@@ -57,17 +61,16 @@ needed the format handling can be left out of course_):
 
 ```ruby
 class SessionsController < Devise::SessionsController
+  respond_to :html, :json
+
   def create
-    respond_to do |format|
-      format.html { super }
-      format.json do
-        self.resource = warden.authenticate!(auth_options)
-        sign_in(resource_name, resource)
+    super do |user|
+      if request.format.json?
         data = {
-          token:      self.resource.authentication_token,
-          user_email: self.resource.email
+          token: user.authentication_token,
+          email: user.email
         }
-        render json: data, status: 201
+        render json: data, status: 201 and return
       end
     end
   end
@@ -89,18 +92,22 @@ token and email if present:
 class ApplicationController < ActionController::Base
   before_filter :authenticate_user_from_token!
 
+  # Enter the normal Devise authentication path,
+  # using the token authenticated user if available
+  before_filter :authenticate_user!
+
   private
 
-    def authenticate_user_from_token!
-      authenticate_with_http_token do |token, options|
-        user_email = options[:user_email].presence
-        user       = user_email && User.find_by_email(user_email)
+  def authenticate_user_from_token!
+    authenticate_with_http_token do |token, options|
+      user_email = options[:email].presence
+      user = user_email && User.find_by_email(user_email)
 
-        if user && Devise.secure_compare(user.authentication_token, token)
-          sign_in user, store: false
-        end
+      if user && Devise.secure_compare(user.authentication_token, token)
+        sign_in user, store: false
       end
     end
+  end
 end
 ```
 
@@ -168,11 +175,11 @@ export default Ember.Controller.extend(LoginControllerMixin, {
 
 The authorizer (see the
 [API docs for `Authorizers.Devise`](http://ember-simple-auth.com/ember-simple-auth-devise-api-docs.html#SimpleAuth-Authorizers-Devise))
-authorizes requests by adding `user_token` and `user_email` properties from the
+authorizes requests by adding `token` and `email` properties from the
 session in the `Authorization` header:
 
 ```
-Authorization: Token token="<user_token>", user_email="<user_email>"
+Authorization: Token token="<token>", email="<email>"
 ```
 
 To use the authorizer, configure it on the application's environment object:

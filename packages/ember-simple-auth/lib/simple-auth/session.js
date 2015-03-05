@@ -327,7 +327,7 @@ export default Ember.ObjectProxy.extend(Ember.Evented, {
     @method bindToStoreEvents
     @private
   */
-  bindToStoreEvents: function() {
+  bindToStoreEvents: Ember.observer('store', function() {
     //TODO: reflect all updated properties in the session (setup will only set the secure part)
     var _this = this;
     this.store.on('sessionDataUpdated', function(content) {
@@ -343,5 +343,5 @@ export default Ember.ObjectProxy.extend(Ember.Evented, {
         _this.clear(true, content);
       }
     });
-  }.observes('store')
+  })
 });
